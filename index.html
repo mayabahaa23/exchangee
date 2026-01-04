@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CBE 2025: Live Data Dashboard</title>
+    <style>
+        :root { --cbe: #003366; --gold: #c5a059; --bg: #f1f5f9; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: #1e293b; }
+        .container { max-width: 1200px; margin: auto; }
+        
+        /* Header & Nav */
+        header { background: var(--cbe); color: white; padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 30px; border-bottom: 6px solid var(--gold); }
+        
+        /* Dashboard Cards */
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); margin-bottom: 30px; overflow: hidden; }
+        h2 { color: var(--cbe); margin-top: 0; border-left: 5px solid var(--gold); padding-left: 15px; font-size: 1.5rem; }
+        
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 15px; }
+        th { background: #f8fafc; color: var(--cbe); padding: 12px; text-align: left; border-bottom: 2px solid #cbd5e1; position: sticky; top: 0; }
+        td { padding: 10px; border-bottom: 1px solid #f1f5f9; }
+        .num { text-align: right; font-family: 'SF Mono', 'Courier New', monospace; font-weight: 600; }
+        
+        /* Styling Row Types */
+        .total-row { background: #f1f5f9; font-weight: 800; font-size: 1.1em; color: var(--cbe); }
+        .group-header { background: #fffbeb; font-weight: 700; color: #92400e; }
+        .sub-item { padding-left: 30px; color: #64748b; }
+        .negative { color: #dc2626; }
+        
+        /* Exchange Rate Styles */
+        #exchange-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-top: 20px; }
+        .rate-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; text-align: center; }
+        .rate-box .code { font-weight: 800; color: var(--cbe); display: block; font-size: 1.2rem; }
+        .rate-box .val { font-size: 1.1rem; color: #059669; font-weight: 700; }
+        .update-time { font-size: 11px; color: #94a3b8; text-align: right; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Central Bank of Egypt: Automated Statistical Annex</h1>
+        <p>Full Analysis of 2024/2025 Trade Performance (US$ mn)</p>
+    </header>
+
+    <div class="card">
+        <h2>Live Exchange Rates (Base: 1 Unit to EGP)</h2>
+        <div id="exchange-grid">Loading live market data...</div>
+        <div class="update-time" id="last-update"></div>
+    </div>
+
+    <div class="card">
+        <h2>(5/2) Exports by Degree of Processing</h2>
+        <table>
+            <thead>
+                <tr><th>Merchandise Component</th><th class="num">2023/24</th><th class="num">2024/25</th><th class="num">Change</th></tr>
+            </thead>
+            <tbody id="export-data">
+                </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>(5/3) Imports by Degree of Use</h2>
+        <div style="max-height: 800px; overflow-y: auto;">
+            <table>
+                <thead>
+                    <tr><th>Merchandise Component</th><th class="num">2023/24</th><th class="num">2024/25</th><th class="num">Change</th></tr>
+                </thead>
+                <tbody id="import-data">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. FULL DATA EXTRACTION FROM YOO.PDF
+    const exports = [
+        { type: 'total', label: 'Total Exports***', a: '8325.2', b: '9088.8', c: '763.6' },
+        { type: 'group', label: 'Fuel, Mineral Oils and Products' },
+        { type: 'item', label: 'Crude oil', a: '870.6', b: '344.0', c: '(526.6)' },
+        { type: 'item', label: 'Oil products****', a: '698.2', b: '833.2', c: '135.0' },
+        { type: 'item', label: 'Natural gas', a: '40.6', b: '16.4', c: '(24.2)' },
+        { type: 'item', label: 'Coal of various types', a: '7.5', b: '7.5', c: '0.0' },
+        { type: 'group', label: 'Raw Materials' },
+        { type: 'item', label: 'Fresh, chilled, or cooked vegetables', a: '257.9', b: '330.9', c: '73.0' },
+        { type: 'item', label: 'Fresh or dried fruits', a: '150.5', b: '240.1', c: '89.6' },
+        { type: 'item', label: 'Oranges', a: '102.0', b: '136.7', c: '34.7' },
+        { type: 'item', label: 'Potatoes', a: '146.1', b: '164.8', c: '18.7' },
+        { type: 'item', label: 'Raw cotton', a: '44.2', b: '19.4', c: '(24.8)' },
+        { type: 'item', label: 'Plants and parts thereof', a: '23.5', b: '33.4', c: '9.9' },
+        { type: 'group', label: 'Semi-finished Goods' },
+        { type: 'item', label: 'Gold', a: '619.8', b: '554.5', c: '(65.3)' },
+        { type: 'item', label: 'Ethylene-propylene', a: '165.7', b: '211.3', c: '45.6' },
+        { type: 'item', label: 'Organic and inorganic compounds', a: '290.2', b: '258.3', c: '(31.9)' },
+        { type: 'item', label: 'Cast iron', a: '150.5', b: '145.5', c: '(5.0)' },
+        { type: 'group', label: 'Finished Goods' },
+        { type: 'item', label: 'Textiles', a: '253.9', b: '238.7', c: '(15.2)' },
+        { type: 'item', label: 'Ready-made clothes', a: '260.4', b: '319.7', c: '59.3' },
+        { type: 'item', label: 'Medicines & pharmaceuticals', a: '189.0', b: '203.4', c: '14.4' },
+        { type: 'item', label: 'Wires and cables', a: '334.5', b: '396.2', c: '61.7' },
+        { type: 'item', label: 'Aluminum and articles thereof', a: '101.3', b: '179.2', c: '77.9' },
+        { type: 'item', label: 'Passenger vehicles', a: '37.7', b: '41.0', c: '3.3' },
+        { type: 'item', label: 'Glass & glassware', a: '111.4', b: '136.9', c: '25.5' },
+        { type: 'item', label: 'Fruit and vegetable juices', a: '27.0', b: '49.1', c: '22.1' }
+    ];
+
+    const imports = [
+        { type: 'total', label: 'Total Imports***', a: '16269.8', b: '23149.2', c: '6879.4' },
+        { type: 'group', label: 'Fuel, Mineral Oils and Products' },
+        { type: 'item', label: 'Oil products****', a: '2608.6', b: '5290.0', c: '2681.4' },
+        { type: 'item', label: 'Crude oil', a: '314.6', b: '122.7', c: '(191.9)' },
+        { type: 'group', label: 'Raw Materials' },
+        { type: 'item', label: 'Wheat', a: '394.4', b: '791.6', c: '397.2' },
+        { type: 'item', label: 'Maize', a: '438.3', b: '465.5', c: '27.2' },
+        { type: 'item', label: 'Soya beans', a: '354.0', b: '591.1', c: '237.1' },
+        { type: 'item', label: 'Raw Tobacco', a: '51.3', b: '166.2', c: '114.9' },
+        { type: 'group', label: 'Intermediate Goods' },
+        { type: 'item', label: 'Polypropylene', a: '361.8', b: '526.1', c: '164.3' },
+        { type: 'item', label: 'Cast iron', a: '341.2', b: '517.6', c: '176.4' },
+        { type: 'item', label: 'Cables and wires', a: '216.4', b: '372.9', c: '156.5' },
+        { type: 'item', label: 'Wood (rough/densified)', a: '150.4', b: '299.6', c: '149.2' },
+        { type: 'group', label: 'Consumer Goods (Durable & Non-Durable)' },
+        { type: 'item', label: 'Medicines', a: '712.4', b: '709.4', c: '(3.0)' },
+        { type: 'item', label: 'Meat and offals', a: '239.2', b: '351.8', c: '112.6' },
+        { type: 'item', label: 'Dairy products', a: '77.5', b: '116.5', c: '39.0' },
+        { type: 'item', label: 'Tea', a: '14.0', b: '26.8', c: '12.8' },
+        { type: 'item', label: 'Broad beans', a: '29.5', b: '73.5', c: '44.0' }
+    ];
+
+    // 2. RENDER TABLES
+    function render(data, targetId) {
+        const container = document.getElementById(targetId);
+        container.innerHTML = data.map(row => {
+            if(row.type === 'group') return `<tr class="group-header"><td colspan="4">${row.label}</td></tr>`;
+            const isTotal = row.type === 'total' ? 'class="total-row"' : '';
+            const isSub = row.type === 'item' ? 'class="sub-item"' : '';
+            const negClass = row.c.includes('(') ? 'negative' : '';
+            return `<tr ${isTotal}>
+                <td ${isSub}>${row.label}</td>
+                <td class="num">${row.a}</td>
+                <td class="num">${row.b}</td>
+                <td class="num ${negClass}">${row.c}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // 3. LIVE EXCHANGE RATES FETCHING
+    async function updateRates() {
+        const currencies = ['USD', 'EUR', 'CHF', 'AED', 'CAD', 'JPY', 'CNY', 'SAR'];
+        const grid = document.getElementById('exchange-grid');
+        
+        try {
+            const res = await fetch('https://open.er-api.com/v6/latest/EGP');
+            const data = await res.json();
+            const rates = data.rates;
+            
+            grid.innerHTML = currencies.map(cur => {
+                // Calculation: 1 Unit / (Rate of 1 EGP in that currency) = Value of 1 Unit in EGP
+                const valInEgp = (1 / rates[cur]).toFixed(2);
+                return `
+                    <div class="rate-box">
+                        <span class="code">${cur}</span>
+                        <span class="val">${valInEgp} EGP</span>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('last-update').innerText = "Last Updated: " + new Date().toLocaleString();
+        } catch (e) {
+            grid.innerHTML = "Unable to load live rates. Check internet connection.";
+        }
+    }
+
+    // INITIALIZE
+    render(exports, 'export-data');
+    render(imports, 'import-data');
+    updateRates();
+    setInterval(updateRates, 60000); // Refresh every minute
+</script>
+
+</body>
+</html>
